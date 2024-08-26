@@ -1,0 +1,4 @@
+{
+  "db_migrations_path" : "../db/migrations",
+  "db_settings_path" : "../settings.json"
+}
