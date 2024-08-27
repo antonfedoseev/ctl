@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"regexp"
 )
 
 const (
 	defaultMigrationsTable           = "schema_migrations"
 	defaultMigrationsTableColumnName = "migration"
-	shardsDBAlias                    = "shards"
+	shardsDbAlias                    = "shards"
 )
 
 var (
@@ -57,12 +58,11 @@ func getMigrationsFilesPaths(files []os.DirEntry) []string {
 			continue
 		}
 
-		path := file.Name()
-		if !dbMigrationsFileExp.MatchString(path) {
+		if !dbMigrationsFileExp.MatchString(file.Name()) {
 			continue
 		}
 
-		fileNames = append(fileNames, path)
+		fileNames = append(fileNames, file.Name())
 	}
 
 	return fileNames
@@ -87,25 +87,26 @@ func applyDatabasesMigrations(ctx context.Context, migrationsPath string, dbSett
 			continue
 		}
 
-		directoryInfo, err := v.Info()
+		fullPath := path.Join(migrationsPath, v.Name())
+		files, err := os.ReadDir(fullPath)
 		if err != nil {
-			log.Default().Printf("Skip database directory \"%s\" reading. Error: %v\n", directoryInfo.Name(), err)
-			continue
-		}
-
-		files, err := os.ReadDir(v.Name())
-		if err != nil {
-			log.Default().Printf("Skip database directory \"%s\" reading. Read migrations error: %v\n", directoryInfo.Name(), err)
+			log.Default().Printf("Skip database directory \"%s\" reading. Read migrations error: %v\n", fullPath, err)
 			continue
 		}
 
 		filePaths := getMigrationsFilesPaths(files)
 		if len(filePaths) == 0 {
-			log.Default().Printf("Skip database directory \"%s\". There are no migrations here!\n", directoryInfo.Name())
+			log.Default().Printf("Skip database directory \"%s\". There are no migrations here!\n", fullPath)
 			continue
 		}
 
-		err = apply(ctx, dbSettings, directoryInfo.Name(), filePaths)
+		m := Migrations{
+			Directory: fullPath,
+			Files:     filePaths,
+			DbAlias:   v.Name(),
+		}
+
+		err = apply(ctx, dbSettings, m)
 		if err != nil {
 			return err
 		}
@@ -114,17 +115,17 @@ func applyDatabasesMigrations(ctx context.Context, migrationsPath string, dbSett
 	return nil
 }
 
-func apply(ctx context.Context, dbSettings settings.DBSettings, dbAlias string, files []string) error {
-	if dbAlias == shardsDBAlias {
-		return applyMigrationsToShardDBs(ctx, dbSettings, files)
+func apply(ctx context.Context, dbSettings settings.DBSettings, migrations Migrations) error {
+	if migrations.DbAlias == shardsDbAlias {
+		return applyMigrationsToShardDBs(ctx, dbSettings, migrations)
 	}
 
-	dbSpec, ok := dbSettings.DBs[dbAlias]
+	dbSpec, ok := dbSettings.DBs[migrations.DbAlias]
 	if !ok {
-		return fmt.Errorf("\"%s\" %w: ", dbAlias, ErrDataBaseNotExists)
+		return fmt.Errorf("\"%s\" %w: ", migrations.DbAlias, ErrDataBaseNotExists)
 	}
 
-	return applyMigrationsToDB(ctx, dbSpec, files)
+	return applyMigrationsToDB(ctx, dbSpec, migrations)
 }
 
 func createDatabases(ctx context.Context, dbSettings settings.DBSettings) error {
@@ -137,32 +138,32 @@ func createDatabases(ctx context.Context, dbSettings settings.DBSettings) error 
 	return nil
 }
 
+func createMigrationsTables(ctx context.Context, dbSettings settings.DBSettings) error {
+	for _, spec := range dbSettings.DBs {
+
+		if err := createMigrationsTable(ctx, spec); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func createDatabase(ctx context.Context, dbSpec settings.DBSpec) error {
-	db, err := sql.Open(dbSpec.Diver, dbSpec.ConnStr())
+	db, err := sql.Open(dbSpec.Diver, dbSpec.CleanConnStr())
 	if err != nil {
 		return err
 	}
 
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	if _, err := conn.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", dbSpec.Name)); err != nil {
-		return err
-	}
-
-	err = createMigrationsTable(ctx, conn)
-	if err != nil {
-		return err
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", dbSpec.Name)); err != nil {
+		return fmt.Errorf("failed create \"%s\" database: %w", dbSpec.Name, err)
 	}
 
 	return nil
 }
 
 func dropDatabase(ctx context.Context, dbSpec settings.DBSpec) error {
-	db, err := sql.Open(dbSpec.Diver, dbSpec.ConnStr())
+	db, err := sql.Open(dbSpec.Diver, dbSpec.CleanConnStr())
 	if err != nil {
 		return err
 	}
@@ -190,15 +191,19 @@ func dropAllDatabases(ctx context.Context, dbSettings settings.DBSettings) error
 	return nil
 }
 
-func createMigrationsTable(ctx context.Context, conn *sql.Conn) error {
-	sql := fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %s (`%s` String) ENGINE = MergeTree() ORDER BY %s",
+func createMigrationsTable(ctx context.Context, dbSpec settings.DBSpec) error {
+	db, err := sql.Open(dbSpec.Diver, dbSpec.ConnStr())
+	if err != nil {
+		return err
+	}
+
+	sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (`%s` varchar(255) default \"\", PRIMARY KEY (`%s`)) ENGINE=InnoDB;",
 		defaultMigrationsTable,
 		defaultMigrationsTableColumnName,
 		defaultMigrationsTableColumnName,
 	)
 
-	if _, err := conn.ExecContext(ctx, sql); err != nil {
+	if _, err := db.ExecContext(ctx, sql); err != nil {
 		return err
 	}
 

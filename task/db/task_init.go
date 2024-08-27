@@ -24,6 +24,11 @@ func (t *TaskInit) Run(ctx context.Context) error {
 		return err
 	}
 
+	err = createMigrationsTables(ctx, t.dbSettings)
+	if err != nil {
+		return err
+	}
+
 	err = applyDatabasesMigrations(ctx, t.settings.DbMigrationsPath, t.dbSettings)
 	if err != nil {
 		return err

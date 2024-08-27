@@ -5,6 +5,7 @@ import (
 	"ctl/settings"
 	"ctl/task"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"os"
 )
 

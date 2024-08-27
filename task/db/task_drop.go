@@ -43,7 +43,7 @@ func (t *TaskDrop) Run(ctx context.Context) error {
 		return err
 	}
 
-	if t.dbName == shardsDBAlias {
+	if t.dbName == shardsDbAlias {
 		shards := getShardsSpecs(t.dbSettings)
 		for _, dbSpec := range shards {
 			err = dropDatabase(ctx, dbSpec)
@@ -94,7 +94,7 @@ func (t *TaskDropTable) Run(ctx context.Context) error {
 		return err
 	}
 
-	if t.dbName == shardsDBAlias {
+	if t.dbName == shardsDbAlias {
 		shards := getShardsSpecs(t.dbSettings)
 		for _, dbSpec := range shards {
 			err = dropTable(ctx, dbSpec, t.tableName)

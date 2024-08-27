@@ -5,8 +5,8 @@ import (
 	"ctl/settings"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -17,10 +17,16 @@ type Migration struct {
 	Content string
 }
 
-var dbShardNameExp = regexp.MustCompile("^*_shard_\\d{2}$")
+type Migrations struct {
+	Directory string
+	Files     []string
+	DbAlias   string
+}
+
+var dbShardNameExp = regexp.MustCompile("^shard_\\d{2}$")
 
 func applyMigrations(ctx context.Context, sqlDb *sql.DB, dbName string, migrations []Migration) error {
-	log.Default().Printf("Apply migrations for \"%s\" database...", dbName)
+	log.Default().Printf("\nApply migrations for \"%s\" database...", dbName)
 
 	conn, err := sqlDb.Conn(ctx)
 	if err != nil {
@@ -34,12 +40,12 @@ func applyMigrations(ctx context.Context, sqlDb *sql.DB, dbName string, migratio
 		}
 	}
 
-	log.Default().Printf("Migrations applied for \"%s\" database!", dbName)
+	log.Default().Printf("Migrations applied for \"%s\" database!\n", dbName)
 	return nil
 }
 
 func applyMigration(ctx context.Context, conn *sql.Conn, migration Migration) (err error) {
-	log.Default().Printf("Apply migration: %s, content: %s", migration.Name, migration.Content)
+	log.Default().Printf("\nApply migration: %s, content:\n%s\n", migration.Name, migration.Content)
 
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -57,24 +63,24 @@ func applyMigration(ctx context.Context, conn *sql.Conn, migration Migration) (e
 	if _, err := tx.ExecContext(ctx, migration.Content); err != nil {
 		return err
 	}
-	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (?)", defaultMigrationsTable, defaultMigrationsTableColumnName)
+	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (?);", defaultMigrationsTable, defaultMigrationsTableColumnName)
 
 	if _, err = tx.ExecContext(ctx, sql, migration.Name); err != nil {
 		return err
 	}
 
-	log.Default().Printf("Migration %s applied!", migration.Name)
+	log.Default().Printf("Migration %s applied!\n", migration.Name)
 	return nil
 }
 
-func applyMigrationsToShardDBs(ctx context.Context, dbSettings settings.DBSettings, files []string) error {
+func applyMigrationsToShardDBs(ctx context.Context, dbSettings settings.DBSettings, migrations Migrations) error {
 	shardSpecs := getShardsSpecs(dbSettings)
 	if len(shardSpecs) == 0 {
 		return ErrShardDataBasesNotExist
 	}
 
 	for _, spec := range shardSpecs {
-		err := applyMigrationsToDB(ctx, spec, files)
+		err := applyMigrationsToDB(ctx, spec, migrations)
 		if err != nil {
 			return err
 		}
@@ -83,7 +89,7 @@ func applyMigrationsToShardDBs(ctx context.Context, dbSettings settings.DBSettin
 	return nil
 }
 
-func applyMigrationsToDB(ctx context.Context, dbSpec settings.DBSpec, files []string) error {
+func applyMigrationsToDB(ctx context.Context, dbSpec settings.DBSpec, m Migrations) error {
 
 	sqlDb, err := sql.Open(dbSpec.Diver, dbSpec.ConnStr())
 	if err != nil {
@@ -96,9 +102,9 @@ func applyMigrationsToDB(ctx context.Context, dbSpec settings.DBSpec, files []st
 		return err
 	}
 
-	notAppliedMigrationsFiles := getNotAppliedMigrations(files, appliedMigrations)
+	notAppliedMigrationsFiles := getNotAppliedMigrations(m, appliedMigrations)
 
-	migrations, err := loadMigrationsFromFiles(dbSpec.Name, notAppliedMigrationsFiles)
+	migrations, err := loadMigrationsFromFiles(m.DbAlias, m.Directory, notAppliedMigrationsFiles)
 	if err != nil {
 		return err
 	}
@@ -114,9 +120,9 @@ func applyMigrationsToDB(ctx context.Context, dbSpec settings.DBSpec, files []st
 func getShardsSpecs(dbSettings settings.DBSettings) map[string]settings.DBSpec {
 	m := make(map[string]settings.DBSpec, len(dbSettings.DBs))
 
-	for dbName, spec := range dbSettings.DBs {
-		if dbShardNameExp.MatchString(dbName) {
-			m[dbName] = spec
+	for dbAlias, spec := range dbSettings.DBs {
+		if dbShardNameExp.MatchString(dbAlias) {
+			m[dbAlias] = spec
 		}
 	}
 
@@ -132,7 +138,7 @@ func loadAppliedMigrations(ctx context.Context, sqlDb *sql.DB) (map[string]struc
 	}
 	defer conn.Close()
 
-	rows, err := conn.QueryContext(ctx, "SELECT * FROM ?", defaultMigrationsTable)
+	rows, err := conn.QueryContext(ctx, fmt.Sprintf("SELECT * FROM %s;", defaultMigrationsTable))
 	if err != nil {
 		return nil, err
 	}
@@ -165,9 +171,9 @@ func loadAppliedMigrations(ctx context.Context, sqlDb *sql.DB) (map[string]struc
 	return applied, nil
 }
 
-func getNotAppliedMigrations(files []string, appliedMigrations map[string]struct{}) []string {
-	notAppliedMigrations := make([]string, 0, len(files))
-	for _, name := range files {
+func getNotAppliedMigrations(migrations Migrations, appliedMigrations map[string]struct{}) []string {
+	notAppliedMigrations := make([]string, 0, len(migrations.Files))
+	for _, name := range migrations.Files {
 		if _, ok := appliedMigrations[name]; !ok {
 			notAppliedMigrations = append(notAppliedMigrations, name)
 		}
@@ -176,29 +182,29 @@ func getNotAppliedMigrations(files []string, appliedMigrations map[string]struct
 	return notAppliedMigrations
 }
 
-func loadMigrationsFromFiles(dbName string, files []string) ([]Migration, error) {
-	log.Default().Printf("Loading not applied migrations for \"%s\"", dbName)
-	migrations := make([]Migration, 0, len(files))
+func loadMigrationsFromFiles(dbAlias string, directory string, files []string) ([]Migration, error) {
+	log.Default().Printf("Loading not applied migrations for \"%s\"", dbAlias)
+	list := make([]Migration, 0, len(files))
 
 	for _, notAppliedMigration := range files {
-		p := path.Join(dbName, notAppliedMigration)
-		migrationContent, err := ioutil.ReadFile(p)
+		p := path.Join(directory, notAppliedMigration)
+		migrationContent, err := os.ReadFile(p)
 		if err != nil {
 			return nil, err
 		}
 
-		log.Default().Printf("Load migration: %s; content: %s", p, migrationContent)
+		log.Default().Printf("Load migration: %s", p)
 
 		m := Migration{
 			Name:    notAppliedMigration,
 			Content: string(migrationContent),
 		}
-		migrations = append(migrations, m)
+		list = append(list, m)
 	}
 
-	sort.SliceStable(migrations, func(i, j int) bool {
-		return migrations[i].Name < migrations[j].Name
+	sort.SliceStable(list, func(i, j int) bool {
+		return list[i].Name < list[j].Name
 	})
-	log.Default().Printf("Loading not applied migrations for \"%s\" done!", dbName)
-	return migrations, nil
+	log.Default().Printf("Loading not applied migrations for \"%s\" done!", dbAlias)
+	return list, nil
 }

@@ -42,6 +42,10 @@ func (s *DBSpec) ConnStr() string {
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", s.Username, s.Password, s.Host, s.Port, s.Name)
 }
 
+func (s *DBSpec) CleanConnStr() string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/", s.Username, s.Password, s.Host, s.Port)
+}
+
 func (s *DBSettings) Read(filePath string) error {
 	dat, err := os.ReadFile(filePath)
 	if err != nil {
