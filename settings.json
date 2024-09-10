@@ -3,45 +3,47 @@
   {
     "advert" : {
       "order"                     : 1,
-      "cmd_name"                  : "ad",
-      "repository"                : "",
-      "db_migrations_path"        : "../advert_service/db/migrations",
-      "db_settings_path"          : "../advert_service/settings.json",
-      "docker_compose_path"       : "../advert_service/advertd.yml",
-      "docker_compose_path_debug" : "../advert_service/advertd-debug.yml",
+      "cmd_alias"                 : "ad",
+      "repository"                : "https://github.com/antonfedoseev/advert.git",
+      "path"                      : "../microservices/advert",
+      "db_migrations_path"        : "./db/migrations",
+      "db_settings_path"          : "./settings.json",
+      "docker_compose_path"       : "./advertd.yml",
+      "docker_compose_path_debug" : "./advertd-debug.yml",
       "docker_compose_name"       : "pet:advert-service",
 
-      "docker_compose_services" : {
+      "depends_on_services" : {
         "mysql" : {
           "order" : 1,
-          "docker_compose_path" : "../advert_service/docker/mysql.yml"
+          "docker_compose_path" : "./docker/mysql.yml"
         },
         "redis" : {
-          "order" : 1,
-          "docker_compose_path" : "../advert_service/docker/redis.yml"
+          "order" : 2,
+          "docker_compose_path" : "./docker/redis.yml"
         }
       }
     },
     "photo_processing" : {
       "order"                     : 2,
-      "cmd_name"                  : "pp",
-      "repository"                : "",
-      "db_migrations_path"        : "../photo_process_service/db/migrations",
-      "db_settings_path"          : "../photo_process_service/settings.json",
+      "cmd_alias"                 : "pp",
+      "repository"                : "https://github.com/antonfedoseev/photo_processing.git",
+      "path"                      : "../microservices/photo_processing",
+      "db_migrations_path"        : "./db/migrations",
+      "db_settings_path"          : "./settings.json",
+      "docker_compose_path"       : "./photoprocd.yml",
+      "docker_compose_path_debug" : "./photoprocd-debug.yml",
       "docker_compose_name"       : "pet:photo-processing-service",
-      "docker_compose_path"       : "../photo_process_service/photoprocd.yml",
-      "docker_compose_path_debug" : "../photo_process_service/photoprocd-debug.yml",
 
-      "docker_compose_services" : {
+      "depends_on_services" : {
         "redis" : {
           "order" : 1,
-          "docker_compose_path" : "../photo_process_service/docker/redis.yml"
+          "docker_compose_path" : "./docker/redis.yml"
         }
       }
     }
   },
 
-  "general_services" : {
+  "depends_on_services" : {
     "kafka_claster" : {
       "order" : 1,
       "docker_compose_path" : "../docker/kafka-cluster/kafka.yml",
@@ -59,7 +61,7 @@
     }
   },
 
-  "docker" : {
+  "depends_on_docker_entities" : {
     "external_networks" : [
       {"name" : "pet-backend-advertd"},
       {"name" : "pet-backend-photoprocd"},
