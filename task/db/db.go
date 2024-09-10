@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
 	"path"
@@ -207,6 +208,8 @@ func createMigrationsTable(ctx context.Context, dbSpec settings.DBSpec) error {
 		return err
 	}
 
+	log.Default().Println(" DONE!")
+
 	return nil
 }
 
@@ -216,7 +219,7 @@ func dropTable(ctx context.Context, dbSpec settings.DBSpec, tableName string) er
 		return err
 	}
 
-	log.Default().Printf("Dropping database: \"%s\"...", dbSpec.Name)
+	log.Default().Printf("Dropping table: \"%s\"...", tableName)
 
 	sql := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)
 

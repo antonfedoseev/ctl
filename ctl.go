@@ -5,7 +5,6 @@ import (
 	"ctl/settings"
 	"ctl/task"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	"os"
 )
 
@@ -33,7 +32,7 @@ func main() {
 		return
 	}
 
-	t, err := task.GetTaskByType(taskType, s, os.Args[1])
+	t, err := task.GetTaskByType(taskType, s, os.Args...)
 	if err != nil {
 		fmt.Printf("Task type validation error: %v\n", err)
 		os.Exit(3)

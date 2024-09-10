@@ -1,4 +1,80 @@
 {
-  "db_migrations_path" : "../db/migrations",
-  "db_settings_path" : "../settings.json"
+  "microservices" : 
+  {
+    "advert" : {
+      "order"                     : 1,
+      "cmd_name"                  : "ad",
+      "repository"                : "",
+      "db_migrations_path"        : "../advert_service/db/migrations",
+      "db_settings_path"          : "../advert_service/settings.json",
+      "docker_compose_path"       : "../advert_service/advertd.yml",
+      "docker_compose_path_debug" : "../advert_service/advertd-debug.yml",
+      "docker_compose_name"       : "pet:advert-service",
+
+      "docker_compose_services" : {
+        "mysql" : {
+          "order" : 1,
+          "docker_compose_path" : "../advert_service/docker/mysql.yml"
+        },
+        "redis" : {
+          "order" : 1,
+          "docker_compose_path" : "../advert_service/docker/redis.yml"
+        }
+      }
+    },
+    "photo_processing" : {
+      "order"                     : 2,
+      "cmd_name"                  : "pp",
+      "repository"                : "",
+      "db_migrations_path"        : "../photo_process_service/db/migrations",
+      "db_settings_path"          : "../photo_process_service/settings.json",
+      "docker_compose_name"       : "pet:photo-processing-service",
+      "docker_compose_path"       : "../photo_process_service/photoprocd.yml",
+      "docker_compose_path_debug" : "../photo_process_service/photoprocd-debug.yml",
+
+      "docker_compose_services" : {
+        "redis" : {
+          "order" : 1,
+          "docker_compose_path" : "../photo_process_service/docker/redis.yml"
+        }
+      }
+    }
+  },
+
+  "general_services" : {
+    "kafka_claster" : {
+      "order" : 1,
+      "docker_compose_path" : "../docker/kafka-cluster/kafka.yml",
+      "docker_compose_name" : "pet:kafka-cluster"
+    },
+    "nfs" : {
+      "order" : 2,
+      "executable_path" : "../tools/nfs/WinNFSd.exe",
+      "args"            : ["../www/pet", "/pet"]
+    },
+    "static-server" : {
+      "order" : 3,
+      "docker_compose_path" : "../docker/static-server/nginx.yml",
+      "docker_compose_name" : "pet:static-server"
+    }
+  },
+
+  "docker" : {
+    "external_networks" : [
+      {"name" : "pet-backend-advertd"},
+      {"name" : "pet-backend-photoprocd"},
+      {"name" : "pet-backend-shared"}
+    ],
+    "external_volumes" : [
+      {
+        "name" : "pet-persistent-vol", 
+        "args" : [
+          "--driver local",
+          "--opt type=nfs",
+          "--opt o=nfsvers=3,addr=host.docker.internal,rw",
+          "--opt device=:/pet"
+        ]
+      }
+    ]
+  }
 }
