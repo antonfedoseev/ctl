@@ -10,7 +10,7 @@
       "db_settings_path"          : "./settings.json",
       "docker_compose_path"       : "./advertd.yml",
       "docker_compose_path_debug" : "./advertd-debug.yml",
-      "docker_compose_name"       : "pet:advert-service",
+      "docker_compose_name"       : "pet-advert-service",
 
       "depends_on_services" : {
         "mysql" : {
@@ -32,7 +32,7 @@
       "db_settings_path"          : "./settings.json",
       "docker_compose_path"       : "./photoprocd.yml",
       "docker_compose_path_debug" : "./photoprocd-debug.yml",
-      "docker_compose_name"       : "pet:photo-processing-service",
+      "docker_compose_name"       : "pet-photo-processing-service",
 
       "depends_on_services" : {
         "redis" : {
@@ -47,7 +47,7 @@
     "kafka_claster" : {
       "order" : 1,
       "docker_compose_path" : "../docker/kafka-cluster/kafka.yml",
-      "docker_compose_name" : "pet:kafka-cluster"
+      "docker_compose_name" : "pet-kafka-cluster"
     },
     "nfs" : {
       "order" : 2,
@@ -57,7 +57,7 @@
     "static-server" : {
       "order" : 3,
       "docker_compose_path" : "../docker/static-server/nginx.yml",
-      "docker_compose_name" : "pet:static-server"
+      "docker_compose_name" : "pet-static-server"
     }
   },
 
