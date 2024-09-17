@@ -1,16 +1,16 @@
 {
   "setup_pipeline" : [
-    {"clone microservices repositories"},
-    {"create docker dependent etities"},
-    {"up dependent services"},
-    {"microservices databases init"},
-    {"message broker topics init"}
+    {"name" : "clone microservices repositories"},
+    {"name" : "create docker dependent etities"},
+    {"name" : "up dependent services"},
+    {"name" : "microservices databases init"},
+    {"name" : "message broker topics init"}
   ],
   "run_pipeline" : [
-    {"up dependent services"},
-    {"microservices databases migrate"},
-    {"message broker topics migrate"},
-    {"run microservice", "params" : ["advert"]},
-    {"run microservice", "params" : ["photo_processing"]}
+    {"name" : "up dependent services"},
+    {"name" : "microservices databases migrate"},
+    {"name" : "message broker topics migrate"},
+    {"name" : "run microservice", "params" : ["advert"]},
+    {"name" : "run microservice", "params" : ["photo_processing"]}
   ]
 }
